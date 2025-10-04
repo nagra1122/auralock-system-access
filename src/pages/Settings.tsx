@@ -21,6 +21,8 @@ const Settings = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState(currentSettings.username);
+  const [pin, setPin] = useState('');
+  const [lockScreenMode, setLockScreenMode] = useState(currentSettings.lockScreenMode);
   const [soundEffects, setSoundEffects] = useState(currentSettings.soundEffects);
   const [vibration, setVibration] = useState(currentSettings.vibration);
   const [voiceStyle, setVoiceStyle] = useState(currentSettings.voiceStyle);
@@ -49,8 +51,9 @@ const Settings = () => {
     // Check if trying to change sensitive settings
     const changingPassword = password && password !== currentSettings.password;
     const changingUsername = username !== currentSettings.username;
+    const changingPin = pin && pin !== currentSettings.pin;
     
-    if ((changingPassword || changingUsername) && !currentPassword) {
+    if ((changingPassword || changingUsername || changingPin) && !currentPassword) {
       toast({
         title: 'Authentication Required',
         description: 'Enter your current password to change sensitive settings',
@@ -59,10 +62,20 @@ const Settings = () => {
       return;
     }
 
-    if ((changingPassword || changingUsername) && currentPassword !== currentSettings.password) {
+    if ((changingPassword || changingUsername || changingPin) && currentPassword !== currentSettings.password) {
       toast({
         title: 'Invalid Password',
         description: 'Current password is incorrect',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate PIN if provided
+    if (changingPin && (!/^\d{4,6}$/.test(pin))) {
+      toast({
+        title: 'Invalid PIN',
+        description: 'PIN must be 4-6 digits',
         variant: 'destructive',
       });
       return;
@@ -72,6 +85,7 @@ const Settings = () => {
       soundEffects,
       vibration,
       voiceStyle,
+      lockScreenMode,
     };
 
     if (changingUsername) {
@@ -80,6 +94,10 @@ const Settings = () => {
 
     if (changingPassword) {
       updates.password = password;
+    }
+
+    if (changingPin) {
+      updates.pin = pin;
     }
 
     saveSettings(updates);
@@ -93,6 +111,7 @@ const Settings = () => {
     
     setCurrentPassword('');
     setPassword('');
+    setPin('');
     
     setTimeout(() => {
       navigate('/lock');
@@ -196,6 +215,39 @@ const Settings = () => {
               placeholder="Leave blank to keep current"
               className="bg-input border-primary/50 focus:border-primary"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="pin" className="text-primary font-orbitron uppercase text-xs">
+              New PIN (4-6 digits)
+            </Label>
+            <Input
+              id="pin"
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              placeholder={`Current: ${currentSettings.pin}`}
+              className="bg-input border-primary/50 focus:border-primary font-mono"
+            />
+            <p className="text-xs text-muted-foreground">Leave blank to keep current PIN</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="lock-mode" className="text-primary font-orbitron uppercase text-xs">
+              Lock Screen Mode
+            </Label>
+            <Select value={lockScreenMode} onValueChange={(value: any) => setLockScreenMode(value)}>
+              <SelectTrigger className="bg-input border-primary/50 focus:border-primary">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="password">Password Only</SelectItem>
+                <SelectItem value="pin">PIN Only</SelectItem>
+                <SelectItem value="both">Both (Switch)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

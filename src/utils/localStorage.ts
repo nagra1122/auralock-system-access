@@ -2,6 +2,8 @@ export interface UserSettings {
   password: string;
   username: string;
   voiceCommand: string;
+  pin: string;
+  lockScreenMode: 'password' | 'pin' | 'both';
   theme: 'dark-blue' | 'matrix-green' | 'cyber-purple';
   soundEffects: boolean;
   vibration: boolean;
@@ -13,6 +15,8 @@ const DEFAULT_SETTINGS: UserSettings = {
   password: 'admin123',
   username: 'User',
   voiceCommand: '',
+  pin: '123456',
+  lockScreenMode: 'both',
   theme: 'dark-blue',
   soundEffects: true,
   vibration: true,
