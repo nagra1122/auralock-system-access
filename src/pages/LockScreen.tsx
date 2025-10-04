@@ -39,7 +39,7 @@ const LockScreen = () => {
     }
   };
 
-  const handleDenied = () => {
+  const handleDenied = (reason: 'password' | 'voice' = 'password') => {
     // Prevent multiple triggers - this is critical to stop spam
     if (isShaking || isDenied) {
       console.log('Already showing denied state, preventing duplicate');
@@ -52,7 +52,7 @@ const LockScreen = () => {
     setIsShaking(true);
     
     // Single TTS call
-    speak('Access denied. Wrong password.', settings.voiceStyle);
+    speak(reason === 'voice' ? 'Access denied. Voice mismatch.' : 'Access denied. Wrong password.', settings.voiceStyle);
     
     if (settings.vibration && 'vibrate' in navigator) {
       navigator.vibrate([200, 100, 200]);
@@ -61,7 +61,7 @@ const LockScreen = () => {
     // Single toast
     toast({
       title: 'ACCESS DENIED',
-      description: 'Invalid credentials',
+      description: reason === 'voice' ? 'Voice did not match' : 'Invalid credentials',
       variant: 'destructive',
       className: 'alert-glow',
     });
@@ -99,10 +99,15 @@ const LockScreen = () => {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
+    let processed = false;
     setIsListening(true);
-    speak('Listening for your voice command.', settings.voiceStyle);
+    // No TTS here to avoid echo into the mic
 
     recognition.onresult = (event: any) => {
+      if (processed) return;
+      processed = true;
+      try { recognition.stop(); } catch {}
+
       const transcript = event.results[0][0].transcript.toLowerCase().trim();
       const savedCommand = settings.voiceCommand.toLowerCase().trim();
 
@@ -123,8 +128,7 @@ const LockScreen = () => {
           navigate('/success');
         }, 1500);
       } else {
-        // Only call handleDenied once after complete recognition
-        handleDenied();
+        handleDenied('voice');
       }
     };
 
@@ -132,7 +136,6 @@ const LockScreen = () => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
       
-      // Don't show denied for permission errors
       if (event.error !== 'not-allowed' && event.error !== 'no-speech') {
         toast({
           title: 'Voice Error',
@@ -140,6 +143,10 @@ const LockScreen = () => {
           variant: 'destructive',
         });
       }
+    };
+
+    recognition.onspeechend = () => {
+      try { recognition.stop(); } catch {}
     };
 
     recognition.onend = () => {
