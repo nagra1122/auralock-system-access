@@ -86,6 +86,17 @@ const Auth = () => {
     }
 
     setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setLoading(false);
+      toast({
+        title: 'Already Signed In',
+        description: 'You are already logged in',
+        className: 'bg-success-green border-primary cyber-glow',
+      });
+      navigate('/');
+      return;
+    }
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,

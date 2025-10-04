@@ -36,11 +36,12 @@ export const speak = (text: string, voice: 'male' | 'female' | 'robotic' = 'male
             console.log('Selected robotic voice:', selectedVoice?.name);
             break;
           default:
-            // Male voice
+            // Male voice (avoid matching 'female')
             selectedVoice = voices.find(v => 
-              v.name.toLowerCase().includes('male') ||
+              v.name.toLowerCase().includes('google uk english male') ||
+              v.name.toLowerCase().includes('daniel') ||
               v.name.toLowerCase().includes('david') ||
-              v.name.toLowerCase().includes('google uk english male')
+              (v.name.toLowerCase().includes('male') && !v.name.toLowerCase().includes('female'))
             );
             console.log('Selected male voice:', selectedVoice?.name);
         }
@@ -62,8 +63,8 @@ export const speak = (text: string, voice: 'male' | 'female' | 'robotic' = 'male
       window.speechSynthesis.addEventListener('voiceschanged', setVoice, { once: true });
     }
     
-    utterance.rate = 1;
-    utterance.volume = 1;
+    utterance.rate = utterance.rate || 1;
+    utterance.volume = utterance.volume || 1;
     
     window.speechSynthesis.speak(utterance);
   }

@@ -109,39 +109,38 @@ const LockScreen = () => {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    let processed = false;
+    // Helpers for tolerant matching
+    const normalize = (s: string) =>
+      s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+
+    const isVoiceMatch = (heard: string, expected: string) => {
+      const a = normalize(heard);
+      const b = normalize(expected);
+      if (!a || !b) return false;
+      if (a === b) return true;
+      if (a.includes(b) || b.includes(a)) return true;
+      const aSet = new Set(a.split(' '));
+      const bSet = new Set(b.split(' '));
+      let inter = 0;
+      aSet.forEach(w => { if (bSet.has(w)) inter++; });
+      const union = new Set([...aSet, ...bSet]).size;
+      const jaccard = inter / union;
+      return jaccard >= 0.75;
+    };
+
     let hasEnded = false;
+    let transcriptText = '';
     setIsListening(true);
+
+    const savedCommand = settings.voiceCommand;
 
     recognition.onresult = (event: any) => {
       console.log('Voice recognition result received');
-      const transcript = event.results[0][0].transcript.toLowerCase().trim();
-      const savedCommand = settings.voiceCommand.toLowerCase().trim();
+      const result = event.results[0][0];
+      transcriptText = String(result.transcript || '').toLowerCase().trim();
 
-      console.log('Voice unlock - Recognized:', transcript);
-      console.log('Voice unlock - Expected:', savedCommand);
-      console.log('Voice unlock - Match:', transcript === savedCommand);
-
-      // Only process once at the end
-      recognition.onend = () => {
-        if (hasEnded) return;
-        hasEnded = true;
-        setIsListening(false);
-
-        if (transcript === savedCommand) {
-          speak(`Welcome ${settings.username}. System Unlocked.`, settings.voiceStyle);
-          toast({
-            title: 'ACCESS GRANTED',
-            description: 'Voice authentication successful',
-            className: 'bg-success-green border-primary cyber-glow',
-          });
-          setTimeout(() => {
-            navigate('/success');
-          }, 1500);
-        } else {
-          handleDenied('voice');
-        }
-      };
+      console.log('Voice unlock - Recognized:', transcriptText);
+      console.log('Voice unlock - Expected:', savedCommand.toLowerCase().trim());
     };
 
     recognition.onerror = (event: any) => {
@@ -155,6 +154,26 @@ const LockScreen = () => {
           description: 'Could not recognize voice. Please try again.',
           variant: 'destructive',
         });
+      }
+    };
+
+    recognition.onend = () => {
+      if (hasEnded) return;
+      hasEnded = true;
+      setIsListening(false);
+
+      if (isVoiceMatch(transcriptText, savedCommand)) {
+        speak(`Welcome ${settings.username}. System Unlocked.`, settings.voiceStyle);
+        toast({
+          title: 'ACCESS GRANTED',
+          description: 'Voice authentication successful',
+          className: 'bg-success-green border-primary cyber-glow',
+        });
+        setTimeout(() => {
+          navigate('/success');
+        }, 1500);
+      } else {
+        handleDenied('voice');
       }
     };
 
