@@ -57,12 +57,19 @@ const Success = () => {
           </div>
 
           <CyberButton
-            variant="primary"
-            onClick={() => navigate('/')}
+            variant="secondary"
+            onClick={() => navigate('/lock')}
             className="w-full"
           >
             Lock Again
           </CyberButton>
+          
+          <button
+            onClick={() => navigate('/')}
+            className="text-sm text-primary hover:text-primary/80 transition-colors"
+          >
+            Back to Start
+          </button>
         </div>
       </div>
     </div>

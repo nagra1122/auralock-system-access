@@ -39,7 +39,7 @@ const Settings = () => {
     });
     
     setTimeout(() => {
-      navigate('/');
+      navigate('/lock');
     }, 1500);
   };
 
@@ -49,7 +49,7 @@ const Settings = () => {
       
       <div className="z-10 w-full max-w-md space-y-6 fade-in">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/lock')}
           className="flex items-center text-primary hover:text-primary/80 transition-colors"
         >
           <ArrowLeft className="mr-2" size={20} />

@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import StartScreen from "./pages/StartScreen";
+import Setup from "./pages/Setup";
 import LockScreen from "./pages/LockScreen";
 import VoiceSetup from "./pages/VoiceSetup";
 import Success from "./pages/Success";
@@ -18,7 +20,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<LockScreen />} />
+          <Route path="/" element={<StartScreen />} />
+          <Route path="/setup" element={<Setup />} />
+          <Route path="/lock" element={<LockScreen />} />
           <Route path="/voice-setup" element={<VoiceSetup />} />
           <Route path="/success" element={<Success />} />
           <Route path="/settings" element={<Settings />} />

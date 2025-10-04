@@ -20,6 +20,8 @@ const LockScreen = () => {
   const settings = getSettings();
 
   const handlePasswordUnlock = () => {
+    if (!password.trim()) return;
+    
     if (password === settings.password) {
       speak(`Welcome ${settings.username}. System Unlocked.`, settings.voiceStyle);
       toast({
@@ -36,15 +38,21 @@ const LockScreen = () => {
   };
 
   const handleDenied = () => {
+    // Prevent multiple triggers
+    if (isShaking || isDenied) return;
+    
     incrementAttempts();
     setIsDenied(true);
     setIsShaking(true);
+    
+    // Single TTS call
     speak('Access denied. Wrong password.', settings.voiceStyle);
     
     if (settings.vibration && 'vibrate' in navigator) {
       navigator.vibrate([200, 100, 200]);
     }
 
+    // Single toast
     toast({
       title: 'ACCESS DENIED',
       description: 'Invalid credentials',
@@ -117,12 +125,19 @@ const LockScreen = () => {
             </CyberButton>
           </div>
 
-          <div className="text-center">
+          <div className="text-center space-x-4">
             <button
               onClick={() => navigate('/settings')}
               className="text-sm text-primary hover:text-primary/80 transition-colors"
             >
               Settings
+            </button>
+            <span className="text-muted-foreground">•</span>
+            <button
+              onClick={() => navigate('/')}
+              className="text-sm text-primary hover:text-primary/80 transition-colors"
+            >
+              Back to Start
             </button>
           </div>
         </div>
