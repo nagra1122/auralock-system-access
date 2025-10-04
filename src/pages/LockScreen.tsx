@@ -167,7 +167,7 @@ const LockScreen = () => {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    // Helpers for tolerant matching
+    // Helpers for tolerant matching (stricter to prevent premature unlock)
     const normalize = (s: string) =>
       s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
 
@@ -176,27 +176,42 @@ const LockScreen = () => {
       const b = normalize(expected);
       if (!a || !b) return false;
       if (a === b) return true;
-      if (a.includes(b) || b.includes(a)) return true;
-      
-      // Word-level similarity
-      const aWords = a.split(' ');
-      const bWords = b.split(' ');
+
+      // Word-level similarity (no substring shortcuts)
+      const aWords = a.split(' ').filter(Boolean);
+      const bWords = b.split(' ').filter(Boolean);
       const aSet = new Set(aWords);
       const bSet = new Set(bWords);
+
       let inter = 0;
-      aSet.forEach(w => { if (bSet.has(w)) inter++; });
+      aSet.forEach((w) => { if (bSet.has(w)) inter++; });
+
       const union = new Set([...aSet, ...bSet]).size;
-      const jaccard = inter / union;
-      
-      // Also check if most words match in order
+      const jaccard = union === 0 ? 0 : inter / union;
+
+      // Coverage: how much of expected was heard and vice-versa
+      const coverageExpected = bWords.length ? inter / bWords.length : 0;
+      const coverageHeard = aWords.length ? inter / aWords.length : 0;
+
+      // In-order word match ratio
       let matchCount = 0;
       const minLen = Math.min(aWords.length, bWords.length);
       for (let i = 0; i < minLen; i++) {
         if (aWords[i] === bWords[i]) matchCount++;
       }
-      const sequenceMatch = matchCount / minLen;
-      
-      return jaccard >= 0.7 || sequenceMatch >= 0.7;
+      const sequenceMatch = minLen ? matchCount / minLen : 0;
+
+      // Minimum words to avoid unlocking on a single short word
+      const minWordsRequired = Math.min(bWords.length, 3); // at least 2-3 words
+      const wordsOk = aWords.length >= Math.max(2, minWordsRequired);
+
+      // Stricter acceptance criteria
+      return (
+        wordsOk &&
+        (coverageExpected >= 0.85 || jaccard >= 0.85) &&
+        coverageHeard >= 0.6 &&
+        sequenceMatch >= 0.7
+      );
     };
 
     let hasEnded = false;
