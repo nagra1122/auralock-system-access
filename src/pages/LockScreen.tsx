@@ -143,6 +143,22 @@ const LockScreen = () => {
     }, 1000);
   };
 
+  const stopVoice = () => {
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onspeechend = null;
+        recognitionRef.current.stop();
+      }
+    } catch (e) {
+      console.log('Stop voice error', e);
+    } finally {
+      setIsListening(false);
+    }
+  };
+
   const handleVoiceUnlock = () => {
     // Prevent multiple triggers while already listening or denied
     if (isListening || isDenied || isShaking) {
@@ -161,11 +177,22 @@ const LockScreen = () => {
       return;
     }
 
+    const savedCommand = settings.voiceCommand?.trim();
+    if (!savedCommand) {
+      toast({
+        title: 'Voice Command Missing',
+        description: 'Please set up your voice command first.',
+        variant: 'destructive',
+      });
+      navigate('/voice-setup');
+      return;
+    }
+
     const recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+    recognition.continuous = true; // capture full phrase(s)
+    recognition.interimResults = true; // accumulate interim + final
+    recognition.maxAlternatives = 3;
 
     // Helpers for tolerant matching (stricter to prevent premature unlock)
     const normalize = (s: string) =>
@@ -202,7 +229,7 @@ const LockScreen = () => {
       const sequenceMatch = minLen ? matchCount / minLen : 0;
 
       // Minimum words to avoid unlocking on a single short word
-      const minWordsRequired = Math.min(bWords.length, 3); // at least 2-3 words
+      const minWordsRequired = Math.min(bWords.length, 3); // at least 2–3 words
       const wordsOk = aWords.length >= Math.max(2, minWordsRequired);
 
       // Stricter acceptance criteria
@@ -215,26 +242,43 @@ const LockScreen = () => {
     };
 
     let hasEnded = false;
-    let transcriptText = '';
+    let finalTranscript = '';
+    let interimTranscript = '';
+    let silenceTimer: number | undefined;
+
     setIsListening(true);
 
-    const savedCommand = settings.voiceCommand;
+    const resetSilenceTimer = () => {
+      if (silenceTimer) clearTimeout(silenceTimer);
+      // stop after ~1s of silence (lets longer phrases complete)
+      silenceTimer = window.setTimeout(() => {
+        try { recognition.stop(); } catch {}
+      }, 1000);
+    };
 
     recognition.onresult = (event: any) => {
-      console.log('Voice recognition result received');
-      const result = event.results[0][0];
-      transcriptText = String(result.transcript || '').toLowerCase().trim();
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const res = event.results[i];
+        const best = res[0];
+        if (res.isFinal) {
+          finalTranscript += `${best.transcript} `;
+        } else {
+          interimTranscript = best.transcript;
+        }
+      }
+      resetSilenceTimer();
 
-      console.log('Voice unlock - Recognized:', transcriptText);
-      console.log('Voice unlock - Expected:', savedCommand.toLowerCase().trim());
+      const debugHeard = (finalTranscript || interimTranscript).toLowerCase().trim();
+      console.log('Voice heard (live):', debugHeard);
     };
 
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       hasEnded = true;
       setIsListening(false);
+      if (silenceTimer) clearTimeout(silenceTimer);
       
-      if (event.error !== 'not-allowed' && event.error !== 'no-speech' && event.error !== 'aborted') {
+      if (!['not-allowed', 'no-speech', 'aborted'].includes(event.error)) {
         toast({
           title: 'Voice Error',
           description: 'Could not recognize voice. Please try again.',
@@ -247,31 +291,47 @@ const LockScreen = () => {
       if (hasEnded) return;
       hasEnded = true;
       setIsListening(false);
+      if (silenceTimer) clearTimeout(silenceTimer);
 
-      if (isVoiceMatch(transcriptText, savedCommand)) {
+      const transcriptText = (finalTranscript || interimTranscript).toLowerCase().trim();
+      const expected = savedCommand.toLowerCase();
+
+      // Require at least near-length to expected and min words
+      const words = transcriptText.split(/\s+/).filter(Boolean);
+      const expectedWords = expected.split(/\s+/).filter(Boolean);
+      const enoughWords = words.length >= Math.max(2, Math.min(expectedWords.length, 3));
+
+      if (!transcriptText || !enoughWords) {
+        toast({
+          title: 'Too short',
+          description: 'Speak the full command clearly.',
+          variant: 'destructive',
+        });
+        handleDenied('voice');
+        return;
+      }
+
+      if (isVoiceMatch(transcriptText, expected)) {
         speak(`Welcome ${settings.username}. System Unlocked.`, settings.voiceStyle);
         toast({
           title: 'ACCESS GRANTED',
           description: 'Voice authentication successful',
           className: 'bg-success-green border-primary cyber-glow',
         });
-        setTimeout(() => {
-          navigate('/success');
-        }, 1500);
+        setTimeout(() => { navigate('/success'); }, 1500);
       } else {
         handleDenied('voice');
       }
     };
 
     recognition.onspeechend = () => {
-      console.log('Speech ended, stopping recognition');
-      try { recognition.stop(); } catch (e) { console.log('Already stopped'); }
+      // Do not force stop here; we rely on silence timer to avoid cutting early
+      console.log('Speech ended');
     };
 
     recognitionRef.current = recognition;
     recognition.start();
   };
-
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden ${isDenied ? 'bg-red-900/20' : ''}`}>
       <ParticleBackground />
@@ -340,12 +400,11 @@ const LockScreen = () => {
 
                 <CyberButton
                   variant="secondary"
-                  onClick={handleVoiceUnlock}
+                  onClick={isListening ? stopVoice : handleVoiceUnlock}
                   className="w-full"
-                  disabled={isListening}
                 >
                   <Mic className={`mr-2 ${isListening ? 'animate-pulse' : ''}`} size={20} />
-                  {isListening ? 'Listening...' : 'Unlock with Voice'}
+                  {isListening ? 'Stop Listening' : 'Unlock with Voice'}
                 </CyberButton>
 
                 {settings.lockScreenMode === 'both' && (
