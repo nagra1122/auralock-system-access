@@ -40,9 +40,13 @@ const LockScreen = () => {
   };
 
   const handleDenied = () => {
-    // Prevent multiple triggers
-    if (isShaking || isDenied) return;
+    // Prevent multiple triggers - this is critical to stop spam
+    if (isShaking || isDenied) {
+      console.log('Already showing denied state, preventing duplicate');
+      return;
+    }
     
+    console.log('Access denied triggered');
     incrementAttempts();
     setIsDenied(true);
     setIsShaking(true);
@@ -62,7 +66,9 @@ const LockScreen = () => {
       className: 'alert-glow',
     });
 
+    // Reset states after animation
     setTimeout(() => {
+      console.log('Resetting denied state');
       setIsShaking(false);
       setIsDenied(false);
       setPassword('');
@@ -70,7 +76,11 @@ const LockScreen = () => {
   };
 
   const handleVoiceUnlock = () => {
-    if (isListening || isDenied) return;
+    // Prevent multiple triggers while already listening or denied
+    if (isListening || isDenied || isShaking) {
+      console.log('Already processing, ignoring voice unlock request');
+      return;
+    }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
@@ -87,6 +97,7 @@ const LockScreen = () => {
     recognition.lang = 'en-US';
     recognition.continuous = false;
     recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
 
     setIsListening(true);
     speak('Listening for your voice command.', settings.voiceStyle);
@@ -95,8 +106,11 @@ const LockScreen = () => {
       const transcript = event.results[0][0].transcript.toLowerCase().trim();
       const savedCommand = settings.voiceCommand.toLowerCase().trim();
 
-      console.log('Recognized:', transcript);
-      console.log('Expected:', savedCommand);
+      console.log('Voice unlock - Recognized:', transcript);
+      console.log('Voice unlock - Expected:', savedCommand);
+      console.log('Voice unlock - Match:', transcript === savedCommand);
+
+      setIsListening(false);
 
       if (transcript === savedCommand) {
         speak(`Welcome ${settings.username}. System Unlocked.`, settings.voiceStyle);
@@ -105,12 +119,11 @@ const LockScreen = () => {
           description: 'Voice authentication successful',
           className: 'bg-success-green border-primary cyber-glow',
         });
-        setIsListening(false);
         setTimeout(() => {
           navigate('/success');
         }, 1500);
       } else {
-        setIsListening(false);
+        // Only call handleDenied once after complete recognition
         handleDenied();
       }
     };
@@ -118,14 +131,19 @@ const LockScreen = () => {
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
-      toast({
-        title: 'Voice Error',
-        description: 'Could not recognize voice. Please try again.',
-        variant: 'destructive',
-      });
+      
+      // Don't show denied for permission errors
+      if (event.error !== 'not-allowed' && event.error !== 'no-speech') {
+        toast({
+          title: 'Voice Error',
+          description: 'Could not recognize voice. Please try again.',
+          variant: 'destructive',
+        });
+      }
     };
 
     recognition.onend = () => {
+      console.log('Speech recognition ended');
       setIsListening(false);
     };
 

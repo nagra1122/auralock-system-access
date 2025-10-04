@@ -55,36 +55,68 @@ const Setup = () => {
   };
 
   const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        setHasRecording(true);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      speak('Recording started. Speak your command now.', 'male');
-    } catch (error) {
+    // Use speech recognition instead of audio recording for better phone compatibility
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
       toast({
-        title: 'Microphone Error',
-        description: 'Could not access microphone',
+        title: 'Not Supported',
+        description: 'Speech recognition is not supported in this browser',
         variant: 'destructive',
       });
+      return;
     }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    setIsRecording(true);
+    speak('Speak your unlock command now.', 'male');
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript.trim();
+      console.log('Voice command recorded:', transcript);
+      
+      // Store the transcribed command temporarily
+      audioChunksRef.current = [new Blob([transcript])];
+      setHasRecording(true);
+      setIsRecording(false);
+      
+      speak(`Command recorded: ${transcript}`, 'male');
+      toast({
+        title: 'Command Recorded',
+        description: `"${transcript}"`,
+        className: 'bg-success-green border-primary cyber-glow',
+      });
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      toast({
+        title: 'Recognition Error',
+        description: 'Could not recognize speech. Please try again.',
+        variant: 'destructive',
+      });
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    mediaRecorderRef.current = recognition as any;
+    recognition.start();
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      try {
+        (mediaRecorderRef.current as any).stop();
+      } catch (e) {
+        console.log('Recognition already stopped');
+      }
       setIsRecording(false);
       speak('Recording stopped.', 'male');
     }
@@ -100,75 +132,25 @@ const Setup = () => {
       return;
     }
 
-    // Use speech recognition to transcribe the recorded voice command
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-      // Fallback: ask user to type the command
-      const voiceCommand = prompt('Speech recognition not available. Please type your voice command:');
-      if (voiceCommand && voiceCommand.trim()) {
-        saveSettings({ voiceCommand: voiceCommand.trim() });
-        speak('Setup complete. Welcome to Auralock.', 'male');
-        toast({
-          title: 'Setup Complete',
-          description: 'You can now use Auralock',
-          className: 'bg-success-green border-primary cyber-glow',
-        });
-        setTimeout(() => {
-          navigate('/lock');
-        }, 1500);
-      }
-      return;
-    }
-
-    // Play the recording and transcribe it
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    // Create audio from recorded chunks
-    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl);
-
-    speak('Playing your recording to save the command.', 'male');
-    
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript.trim();
-      console.log('Transcribed voice command:', transcript);
+    // Get the transcribed command from the blob
+    const reader = new FileReader();
+    reader.onload = () => {
+      const voiceCommand = reader.result as string;
+      console.log('Saving voice command:', voiceCommand);
       
-      saveSettings({ voiceCommand: transcript });
+      saveSettings({ voiceCommand });
       speak('Setup complete. Welcome to Auralock.', 'male');
       toast({
         title: 'Setup Complete',
-        description: `Voice command saved: "${transcript}"`,
+        description: `Voice command saved: "${voiceCommand}"`,
         className: 'bg-success-green border-primary cyber-glow',
       });
       setTimeout(() => {
         navigate('/lock');
       }, 1500);
     };
-
-    recognition.onerror = () => {
-      // Fallback if transcription fails
-      const voiceCommand = prompt('Could not transcribe. Please type your voice command:');
-      if (voiceCommand && voiceCommand.trim()) {
-        saveSettings({ voiceCommand: voiceCommand.trim() });
-        speak('Setup complete. Welcome to Auralock.', 'male');
-        toast({
-          title: 'Setup Complete',
-          description: 'You can now use Auralock',
-          className: 'bg-success-green border-primary cyber-glow',
-        });
-        setTimeout(() => {
-          navigate('/lock');
-        }, 1500);
-      }
-    };
-
-    recognition.start();
-    audio.play();
+    
+    reader.readAsText(audioChunksRef.current[0]);
   };
 
   return (
