@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ParticleBackground from '@/components/ParticleBackground';
 import DigitalClock from '@/components/DigitalClock';
@@ -14,6 +14,8 @@ const LockScreen = () => {
   const [password, setPassword] = useState('');
   const [isShaking, setIsShaking] = useState(false);
   const [isDenied, setIsDenied] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -68,7 +70,67 @@ const LockScreen = () => {
   };
 
   const handleVoiceUnlock = () => {
-    navigate('/voice-setup');
+    if (isListening || isDenied) return;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      toast({
+        title: 'Not Supported',
+        description: 'Voice recognition is not supported in this browser',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    setIsListening(true);
+    speak('Listening for your voice command.', settings.voiceStyle);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript.toLowerCase().trim();
+      const savedCommand = settings.voiceCommand.toLowerCase().trim();
+
+      console.log('Recognized:', transcript);
+      console.log('Expected:', savedCommand);
+
+      if (transcript === savedCommand) {
+        speak(`Welcome ${settings.username}. System Unlocked.`, settings.voiceStyle);
+        toast({
+          title: 'ACCESS GRANTED',
+          description: 'Voice authentication successful',
+          className: 'bg-success-green border-primary cyber-glow',
+        });
+        setIsListening(false);
+        setTimeout(() => {
+          navigate('/success');
+        }, 1500);
+      } else {
+        setIsListening(false);
+        handleDenied();
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      toast({
+        title: 'Voice Error',
+        description: 'Could not recognize voice. Please try again.',
+        variant: 'destructive',
+      });
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   return (
@@ -119,9 +181,10 @@ const LockScreen = () => {
               variant="secondary"
               onClick={handleVoiceUnlock}
               className="w-full"
+              disabled={isListening}
             >
-              <Mic className="mr-2" size={20} />
-              Unlock with Voice
+              <Mic className={`mr-2 ${isListening ? 'animate-pulse' : ''}`} size={20} />
+              {isListening ? 'Listening...' : 'Unlock with Voice'}
             </CyberButton>
           </div>
 

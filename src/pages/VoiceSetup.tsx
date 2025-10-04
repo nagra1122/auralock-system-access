@@ -60,18 +60,84 @@ const VoiceSetup = () => {
   };
 
   const saveVoiceCommand = () => {
-    if (hasRecording) {
-      saveSettings({ voiceCommand });
-      speak('Voice command saved successfully.', settings.voiceStyle);
+    if (!hasRecording) {
       toast({
-        title: 'Success',
-        description: 'Voice command saved successfully',
+        title: 'No Recording',
+        description: 'Please record your voice command first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Use speech recognition to transcribe the recorded voice command
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      // Fallback: ask user to type the command
+      const command = prompt('Speech recognition not available. Please type your voice command:');
+      if (command && command.trim()) {
+        saveSettings({ voiceCommand: command.trim() });
+        speak('Voice command updated successfully.', settings.voiceStyle);
+        toast({
+          title: 'Voice Updated',
+          description: `Voice command saved: "${command}"`,
+          className: 'bg-success-green border-primary cyber-glow',
+        });
+        setTimeout(() => {
+          navigate('/settings');
+        }, 1500);
+      }
+      return;
+    }
+
+    // Play the recording and transcribe it
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    // Create audio from recorded chunks
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+
+    speak('Playing your recording to save the command.', settings.voiceStyle);
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript.trim();
+      console.log('Transcribed voice command:', transcript);
+      
+      saveSettings({ voiceCommand: transcript });
+      speak('Voice command updated successfully.', settings.voiceStyle);
+      toast({
+        title: 'Voice Updated',
+        description: `Voice command saved: "${transcript}"`,
         className: 'bg-success-green border-primary cyber-glow',
       });
       setTimeout(() => {
-        navigate('/success');
+        navigate('/settings');
       }, 1500);
-    }
+    };
+
+    recognition.onerror = () => {
+      // Fallback if transcription fails
+      const command = prompt('Could not transcribe. Please type your voice command:');
+      if (command && command.trim()) {
+        saveSettings({ voiceCommand: command.trim() });
+        speak('Voice command updated successfully.', settings.voiceStyle);
+        toast({
+          title: 'Voice Updated',
+          description: 'Your voice command has been updated',
+          className: 'bg-success-green border-primary cyber-glow',
+        });
+        setTimeout(() => {
+          navigate('/settings');
+        }, 1500);
+      }
+    };
+
+    recognition.start();
+    audio.play();
   };
 
   return (

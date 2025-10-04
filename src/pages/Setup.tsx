@@ -100,16 +100,75 @@ const Setup = () => {
       return;
     }
 
-    saveSettings({ voiceCommand: 'voice_command_recorded' });
-    speak('Setup complete. Welcome to Auralock.', 'male');
-    toast({
-      title: 'Setup Complete',
-      description: 'You can now use Auralock',
-      className: 'bg-success-green border-primary cyber-glow',
-    });
-    setTimeout(() => {
-      navigate('/lock');
-    }, 1500);
+    // Use speech recognition to transcribe the recorded voice command
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      // Fallback: ask user to type the command
+      const voiceCommand = prompt('Speech recognition not available. Please type your voice command:');
+      if (voiceCommand && voiceCommand.trim()) {
+        saveSettings({ voiceCommand: voiceCommand.trim() });
+        speak('Setup complete. Welcome to Auralock.', 'male');
+        toast({
+          title: 'Setup Complete',
+          description: 'You can now use Auralock',
+          className: 'bg-success-green border-primary cyber-glow',
+        });
+        setTimeout(() => {
+          navigate('/lock');
+        }, 1500);
+      }
+      return;
+    }
+
+    // Play the recording and transcribe it
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    // Create audio from recorded chunks
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+
+    speak('Playing your recording to save the command.', 'male');
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript.trim();
+      console.log('Transcribed voice command:', transcript);
+      
+      saveSettings({ voiceCommand: transcript });
+      speak('Setup complete. Welcome to Auralock.', 'male');
+      toast({
+        title: 'Setup Complete',
+        description: `Voice command saved: "${transcript}"`,
+        className: 'bg-success-green border-primary cyber-glow',
+      });
+      setTimeout(() => {
+        navigate('/lock');
+      }, 1500);
+    };
+
+    recognition.onerror = () => {
+      // Fallback if transcription fails
+      const voiceCommand = prompt('Could not transcribe. Please type your voice command:');
+      if (voiceCommand && voiceCommand.trim()) {
+        saveSettings({ voiceCommand: voiceCommand.trim() });
+        speak('Setup complete. Welcome to Auralock.', 'male');
+        toast({
+          title: 'Setup Complete',
+          description: 'You can now use Auralock',
+          className: 'bg-success-green border-primary cyber-glow',
+        });
+        setTimeout(() => {
+          navigate('/lock');
+        }, 1500);
+      }
+    };
+
+    recognition.start();
+    audio.play();
   };
 
   return (
@@ -215,8 +274,8 @@ const Setup = () => {
 
             <div className="bg-secondary/50 border border-primary/20 rounded-lg p-4">
               <p className="text-sm text-muted-foreground text-center">
-                <span className="text-primary font-semibold">Tip:</span> Try commands like 
-                "Open my phone" or "Access granted"
+                <span className="text-primary font-semibold">Tip:</span> Speak clearly. Use phrases like 
+                "Open my phone", "Access granted", or "Unlock system"
               </p>
             </div>
           </div>
