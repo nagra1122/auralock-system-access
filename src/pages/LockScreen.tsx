@@ -15,6 +15,7 @@ const LockScreen = () => {
   const [isShaking, setIsShaking] = useState(false);
   const [isDenied, setIsDenied] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [lastDeniedTime, setLastDeniedTime] = useState(0);
   const recognitionRef = useRef<any>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -40,13 +41,22 @@ const LockScreen = () => {
   };
 
   const handleDenied = (reason: 'password' | 'voice' = 'password') => {
-    // Prevent multiple triggers - this is critical to stop spam
+    const now = Date.now();
+    
+    // Cooldown to prevent spam - only allow once per 2 seconds
+    if (now - lastDeniedTime < 2000) {
+      console.log('Cooldown active, ignoring denial');
+      return;
+    }
+    
+    // Prevent multiple triggers
     if (isShaking || isDenied) {
       console.log('Already showing denied state, preventing duplicate');
       return;
     }
     
     console.log('Access denied triggered');
+    setLastDeniedTime(now);
     incrementAttempts();
     setIsDenied(true);
     setIsShaking(true);
@@ -100,14 +110,11 @@ const LockScreen = () => {
     recognition.maxAlternatives = 1;
 
     let processed = false;
+    let hasEnded = false;
     setIsListening(true);
-    // No TTS here to avoid echo into the mic
 
     recognition.onresult = (event: any) => {
-      if (processed) return;
-      processed = true;
-      try { recognition.stop(); } catch {}
-
+      console.log('Voice recognition result received');
       const transcript = event.results[0][0].transcript.toLowerCase().trim();
       const savedCommand = settings.voiceCommand.toLowerCase().trim();
 
@@ -115,28 +122,34 @@ const LockScreen = () => {
       console.log('Voice unlock - Expected:', savedCommand);
       console.log('Voice unlock - Match:', transcript === savedCommand);
 
-      setIsListening(false);
+      // Only process once at the end
+      recognition.onend = () => {
+        if (hasEnded) return;
+        hasEnded = true;
+        setIsListening(false);
 
-      if (transcript === savedCommand) {
-        speak(`Welcome ${settings.username}. System Unlocked.`, settings.voiceStyle);
-        toast({
-          title: 'ACCESS GRANTED',
-          description: 'Voice authentication successful',
-          className: 'bg-success-green border-primary cyber-glow',
-        });
-        setTimeout(() => {
-          navigate('/success');
-        }, 1500);
-      } else {
-        handleDenied('voice');
-      }
+        if (transcript === savedCommand) {
+          speak(`Welcome ${settings.username}. System Unlocked.`, settings.voiceStyle);
+          toast({
+            title: 'ACCESS GRANTED',
+            description: 'Voice authentication successful',
+            className: 'bg-success-green border-primary cyber-glow',
+          });
+          setTimeout(() => {
+            navigate('/success');
+          }, 1500);
+        } else {
+          handleDenied('voice');
+        }
+      };
     };
 
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
+      hasEnded = true;
       setIsListening(false);
       
-      if (event.error !== 'not-allowed' && event.error !== 'no-speech') {
+      if (event.error !== 'not-allowed' && event.error !== 'no-speech' && event.error !== 'aborted') {
         toast({
           title: 'Voice Error',
           description: 'Could not recognize voice. Please try again.',
@@ -146,12 +159,8 @@ const LockScreen = () => {
     };
 
     recognition.onspeechend = () => {
-      try { recognition.stop(); } catch {}
-    };
-
-    recognition.onend = () => {
-      console.log('Speech recognition ended');
-      setIsListening(false);
+      console.log('Speech ended, stopping recognition');
+      try { recognition.stop(); } catch (e) { console.log('Already stopped'); }
     };
 
     recognitionRef.current = recognition;

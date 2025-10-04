@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import ParticleBackground from '@/components/ParticleBackground';
 import CyberButton from '@/components/CyberButton';
 import { getSettings } from '@/utils/localStorage';
@@ -7,8 +9,26 @@ import auralockLogo from '@/assets/auralock-logo.png';
 const StartScreen = () => {
   const navigate = useNavigate();
   const settings = getSettings();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleOpen = () => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+
     // Check if password and voice are set
     if (!settings.password || settings.password === 'admin123' || !settings.voiceCommand) {
       navigate('/setup');
@@ -32,14 +52,20 @@ const StartScreen = () => {
           <p className="text-lg text-primary">Your Voice, Your Key</p>
         </div>
 
-        <div className="pt-8">
+        <div className="pt-8 space-y-4">
           <CyberButton
             variant="primary"
             onClick={handleOpen}
             className="w-full text-xl py-6"
           >
-            Open
+            {user ? 'Open' : 'Sign In'}
           </CyberButton>
+
+          {user && (
+            <p className="text-center text-sm text-muted-foreground">
+              Signed in as {user.email}
+            </p>
+          )}
         </div>
 
         <div className="text-center text-xs text-muted-foreground pt-12">

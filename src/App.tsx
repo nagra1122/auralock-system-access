@@ -9,6 +9,7 @@ import LockScreen from "./pages/LockScreen";
 import VoiceSetup from "./pages/VoiceSetup";
 import Success from "./pages/Success";
 import Settings from "./pages/Settings";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/voice-setup" element={<VoiceSetup />} />
           <Route path="/success" element={<Success />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/auth" element={<Auth />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
